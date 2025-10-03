@@ -15,7 +15,7 @@ fn create_colored_expression(expression: &str) -> Vec<Span<'_>> {
     while let Some(ch) = chars.next() {
         let color = match ch {
             '0'..='9' | '.' => Color::White, // Numbers
-            '+' | '-' | '*' | '/' | '^' | '%' => Color::Cyan, // Operators
+            '+' | '-' | '−' | '*' | '/' | '^' | '%' => Color::Cyan, // Operators
             '(' | ')' => Color::Magenta, // Parentheses
             _ => Color::White, // Default
         };
@@ -184,7 +184,7 @@ fn draw_buttons(f: &mut Frame, app: &App, area: Rect, terminal_size: Rect) {
                 match *label {
                     "C" | "CE" | "⌫" => (Color::Red, Color::Red), // Clear buttons
                     "=" => (Color::Green, Color::Green), // Equals
-                    "+" | "-" | "×" | "÷" | "^" | "%" => (Color::Cyan, Color::Cyan), // Operators
+                    "+" | "-" | "−" | "×" | "÷" | "^" | "%" => (Color::Cyan, Color::Cyan), // Operators
                     "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "." => (Color::White, Color::White), // Numbers
                     "(" | ")" => (Color::Magenta, Color::Magenta), // Parentheses
                     "Copy" => (Color::Blue, Color::Blue), // Copy
@@ -195,7 +195,7 @@ fn draw_buttons(f: &mut Frame, app: &App, area: Rect, terminal_size: Rect) {
                 match *label {
                     "C" | "CE" | "⌫" => (Color::Red, Color::Red), // Clear buttons
                     "=" => (Color::Green, Color::Green), // Equals
-                    "+" | "-" | "×" | "÷" | "^" | "%" => (Color::Cyan, Color::Cyan), // Operators
+                    "+" | "-" | "−" | "×" | "÷" | "^" | "%" => (Color::Cyan, Color::Cyan), // Operators
                     "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "." => (Color::White, Color::Gray), // Numbers
                     "(" | ")" => (Color::Magenta, Color::Magenta), // Parentheses
                     "Copy" => (Color::Blue, Color::Blue), // Copy
