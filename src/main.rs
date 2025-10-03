@@ -109,7 +109,7 @@ impl App {
                     vec![("4", "4"), ("5", "5"), ("6", "6"), ("−", "-")],
                     vec![("1", "1"), ("2", "2"), ("3", "3"), ("+", "+")],
                     vec![("(", "("), ("0", "0"), (")", ")"), (".", ".")],
-                    vec![("^", "^"), ("%", "%"), ("Graph", "g"), ("2nd", "2nd")],
+                    vec![("^", "^"), ("%", "%"), ("=", "enter"), ("2nd", "2nd")],
                 ],
                 calculator::CalculatorMode::Scientific => vec![
                     vec![("C", "c"), ("CE", "C"), ("⌫", "bksp"), ("÷", "/")],
@@ -117,7 +117,7 @@ impl App {
                     vec![("4", "4"), ("5", "5"), ("6", "6"), ("−", "-")],
                     vec![("1", "1"), ("2", "2"), ("3", "3"), ("+", "+")],
                     vec![("(", "("), ("0", "0"), (")", ")"), (".", ".")],
-                    vec![("^", "^"), ("%", "%"), ("Graph", "g"), ("2nd", "2nd")],
+                    vec![("^", "^"), ("%", "%"), ("=", "enter"), ("2nd", "2nd")],
                 ],
             }
         }
@@ -220,7 +220,13 @@ impl App {
                             self.calculator_module.update_result();
                         }
                     }
-                    "g" => self.enter_graph_mode(),
+                    "g" => {
+                        if self.second_function_mode {
+                            self.enter_graph_mode();
+                        } else {
+                            self.calculator_module.calculate();
+                        }
+                    }
                     "2nd" => self.toggle_second_function(),
                     "pi" => {
                         self.calculator_module

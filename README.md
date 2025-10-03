@@ -70,7 +70,7 @@ Switch to typing mode for direct expression input, or use button navigation for 
 
 ### Graphing Functions
 1. Build an expression using variables (x, y, z, a, b, c) and constants (π, e)
-2. Press `Ctrl+g` or use the Graph button to visualize the expression
+2. Press `Ctrl+g` (always available) or use the Graph button in 2nd function mode
 3. Use arrow keys to pan, +/- to zoom, and `r` to reset the view
 
 ### Variables and Constants
