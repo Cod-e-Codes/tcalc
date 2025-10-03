@@ -189,7 +189,10 @@ fn draw_buttons(f: &mut Frame, app: &App, area: Rect, terminal_size: Rect) {
                     "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "." => (Color::White, Color::Gray), // Numbers
                     "(" | ")" => (Color::Magenta, Color::Magenta), // Parentheses
                     "Copy" => (Color::Blue, Color::Blue), // Copy
-                    _ => (Color::White, Color::Gray), // Scientific functions
+                    // Scientific functions - use distinct colors
+                    "sin" | "cos" | "tan" | "√" | "log" | "ln" => (Color::LightBlue, Color::LightBlue), // Trig/log functions
+                    "exp" | "abs" | "1/x" | "x²" => (Color::Magenta, Color::Magenta), // Advanced functions - same as parentheses
+                    _ => (Color::White, Color::Gray), // Fallback
                 };
                 (color, border, false)
             };
