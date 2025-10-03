@@ -8,6 +8,24 @@ use ratatui::{
 
 use crate::{App, AppState};
 
+fn create_colored_expression(expression: &str) -> Vec<Span<'_>> {
+    let mut spans = Vec::new();
+    let mut chars = expression.chars().peekable();
+    
+    while let Some(ch) = chars.next() {
+        let color = match ch {
+            '0'..='9' | '.' => Color::White, // Numbers
+            '+' | '-' | '*' | '/' | '^' | '%' => Color::Cyan, // Operators
+            '(' | ')' => Color::Magenta, // Parentheses
+            _ => Color::White, // Default
+        };
+        
+        spans.push(Span::styled(ch.to_string(), Style::default().fg(color)));
+    }
+    
+    spans
+}
+
 pub fn draw(f: &mut Frame, app: &App, terminal_size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -85,11 +103,11 @@ fn draw_display(f: &mut Frame, app: &App, area: Rect) {
         app.calculator_module.current_expression.clone()
     };
 
+    let mut expression_spans = vec![Span::styled("Expression: ", Style::default().fg(Color::Gray))];
+    expression_spans.extend(create_colored_expression(&expression));
+    
     let expression_para = Paragraph::new(vec![
-        Line::from(vec![
-            Span::styled("Expression: ", Style::default().fg(Color::Gray)),
-            Span::styled(expression, Style::default().fg(Color::White)),
-        ]),
+        Line::from(expression_spans),
     ])
     .block(
         Block::default()
@@ -223,14 +241,16 @@ fn draw_history(f: &mut Frame, app: &App, area: Rect) {
 
             let timestamp = entry.timestamp.format("%H:%M:%S").to_string();
 
+            let mut history_spans = vec![
+                Span::styled(
+                    format!("[{}] ", timestamp),
+                    Style::default().fg(Color::Gray),
+                ),
+            ];
+            history_spans.extend(create_colored_expression(&entry.expression));
+            
             ListItem::new(vec![
-                Line::from(vec![
-                    Span::styled(
-                        format!("[{}] ", timestamp),
-                        Style::default().fg(Color::Gray),
-                    ),
-                    Span::styled(&entry.expression, Style::default().fg(Color::White)),
-                ]),
+                Line::from(history_spans),
                 Line::from(vec![
                     Span::raw("  "),
                     Span::styled("= ", Style::default().fg(Color::Gray)),
