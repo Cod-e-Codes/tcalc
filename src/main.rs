@@ -44,7 +44,7 @@ impl App {
         Self {
             state: AppState::Normal,
             calculator_module: CalculatorModule::new(),
-            button_position: Some((0, 0)),
+            button_position: None, // No selection by default
             show_history: false,
             history_selected: 0,
             scroll_offset: 0,
@@ -136,6 +136,9 @@ impl App {
             } else if self.scroll_offset > 0 {
                 self.scroll_offset -= 1;
             }
+        } else {
+            // First navigation - set to (0, 0)
+            self.button_position = Some((0, 0));
         }
     }
 
@@ -149,6 +152,9 @@ impl App {
                     self.scroll_offset += 1;
                 }
             }
+        } else {
+            // First navigation - set to (0, 0)
+            self.button_position = Some((0, 0));
         }
     }
 
@@ -157,6 +163,9 @@ impl App {
             && col > 0
         {
             self.button_position = Some((row, col - 1));
+        } else {
+            // First navigation - set to (0, 0)
+            self.button_position = Some((0, 0));
         }
     }
 
@@ -166,12 +175,15 @@ impl App {
             if col < buttons[row].len() - 1 {
                 self.button_position = Some((row, col + 1));
             }
+        } else {
+            // First navigation - set to (0, 0)
+            self.button_position = Some((0, 0));
         }
     }
 
     pub fn toggle_mode(&mut self) {
         self.calculator_module.toggle_mode();
-        self.button_position = Some((0, 0));
+        self.button_position = None; // Clear selection when switching modes
         self.scroll_offset = 0;
     }
 
@@ -271,8 +283,11 @@ fn main() -> Result<()> {
 
 fn handle_mouse_click(app: &mut App, x: u16, y: u16, terminal_width: u16) {
     if let Some((row, col)) = app.mouse_to_button_coords(x, y, terminal_width) {
+        // Set position temporarily for button press
         app.button_position = Some((row, col));
         app.press_button();
+        // Clear selection after mouse click to avoid persistent selection
+        app.button_position = None;
     }
 }
 

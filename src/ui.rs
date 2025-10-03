@@ -177,22 +177,12 @@ fn draw_buttons(f: &mut Frame, app: &App, area: Rect, terminal_size: Rect) {
             };
 
             // Enhanced button styling with color coding for text and borders only
-            let (text_color, border_color) = if is_selected {
-                (Color::Yellow, Color::Yellow)
-            } else if is_hovered {
-                // Hover effect - brighten the colors
-                match *label {
-                    "C" | "CE" | "⌫" => (Color::Red, Color::Red), // Clear buttons
-                    "=" => (Color::Green, Color::Green), // Equals
-                    "+" | "-" | "−" | "×" | "÷" | "^" | "%" => (Color::Cyan, Color::Cyan), // Operators
-                    "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "." => (Color::White, Color::White), // Numbers
-                    "(" | ")" => (Color::Magenta, Color::Magenta), // Parentheses
-                    "Copy" => (Color::Blue, Color::Blue), // Copy
-                    _ => (Color::White, Color::White), // Scientific functions
-                }
+            let (text_color, border_color, is_bold) = if is_selected || is_hovered {
+                // Both selected and hovered use the same yellow highlighting
+                (Color::Yellow, Color::Yellow, true)
             } else {
                 // Normal colors
-                match *label {
+                let (color, border) = match *label {
                     "C" | "CE" | "⌫" => (Color::Red, Color::Red), // Clear buttons
                     "=" => (Color::Green, Color::Green), // Equals
                     "+" | "-" | "−" | "×" | "÷" | "^" | "%" => (Color::Cyan, Color::Cyan), // Operators
@@ -200,12 +190,13 @@ fn draw_buttons(f: &mut Frame, app: &App, area: Rect, terminal_size: Rect) {
                     "(" | ")" => (Color::Magenta, Color::Magenta), // Parentheses
                     "Copy" => (Color::Blue, Color::Blue), // Copy
                     _ => (Color::White, Color::Gray), // Scientific functions
-                }
+                };
+                (color, border, false)
             };
 
             let text_style = Style::default()
                 .fg(text_color)
-                .add_modifier(if is_selected { Modifier::BOLD } else { Modifier::empty() });
+                .add_modifier(if is_bold { Modifier::BOLD } else { Modifier::empty() });
 
             let button = Paragraph::new(*label)
                 .style(text_style)
