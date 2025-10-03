@@ -247,7 +247,7 @@ fn tokenize(expr: &str) -> Result<Vec<Token>> {
     let mut result = Vec::new();
     for (i, token) in tokens.iter().enumerate() {
         result.push(token.clone());
-        
+
         // Check if we need to add implicit multiplication
         if i < tokens.len() - 1 {
             match (token, &tokens[i + 1]) {
