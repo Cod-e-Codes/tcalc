@@ -243,7 +243,32 @@ fn tokenize(expr: &str) -> Result<Vec<Token>> {
         tokens.push(Token::Number(num_buf.parse()?));
     }
 
-    Ok(tokens)
+    // Add implicit multiplication tokens
+    let mut result = Vec::new();
+    for (i, token) in tokens.iter().enumerate() {
+        result.push(token.clone());
+        
+        // Check if we need to add implicit multiplication
+        if i < tokens.len() - 1 {
+            match (token, &tokens[i + 1]) {
+                // Number followed by opening parenthesis: 3( -> 3*(
+                (Token::Number(_), Token::LParen) => {
+                    result.push(Token::Multiply);
+                }
+                // Closing parenthesis followed by number: )3 -> )*3
+                (Token::RParen, Token::Number(_)) => {
+                    result.push(Token::Multiply);
+                }
+                // Closing parenthesis followed by opening parenthesis: )( -> )*(
+                (Token::RParen, Token::LParen) => {
+                    result.push(Token::Multiply);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 #[derive(Debug, Clone)]
