@@ -96,45 +96,74 @@ fn draw_display(f: &mut Frame, app: &App, area: Rect) {
         ])
         .split(area);
 
-    // Expression display with better styling
+    // Expression display with responsive layout
     let expression = if app.calculator_module.current_expression.is_empty() {
         "0".to_string()
     } else {
         app.calculator_module.current_expression.clone()
     };
 
-    let mut expression_spans = vec![Span::styled("Expression: ", Style::default().fg(Color::Gray))];
-    expression_spans.extend(create_colored_expression(&expression));
-    
+    let expression_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(12), // "Expression: " label
+            Constraint::Min(0),      // Expression content (right-aligned)
+        ])
+        .split(chunks[0]);
+
+    // Label on the left
+    let label_para = Paragraph::new("Expression:")
+        .style(Style::default().fg(Color::Gray))
+        .block(Block::default().borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM));
+    f.render_widget(label_para, expression_chunks[0]);
+
+    // Expression content on the right
+    let expression_spans = create_colored_expression(&expression);
     let expression_para = Paragraph::new(vec![
         Line::from(expression_spans),
     ])
+    .alignment(Alignment::Right) // Right-align the expression
     .block(
         Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Blue))
     );
-    f.render_widget(expression_para, chunks[0]);
+    f.render_widget(expression_para, expression_chunks[1]);
 
-    // Result display with better styling
+    // Result display with responsive layout
     let result_style = if app.calculator_module.error_message.is_some() {
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
     };
 
+    let result_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(8), // "Result: " label
+            Constraint::Min(0),     // Result content (right-aligned)
+        ])
+        .split(chunks[1]);
+
+    // Label on the left
+    let label_para = Paragraph::new("Result:")
+        .style(Style::default().fg(Color::Gray))
+        .block(Block::default().borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM));
+    f.render_widget(label_para, result_chunks[0]);
+
+    // Result content on the right
     let result_para = Paragraph::new(vec![
         Line::from(vec![
-            Span::styled("Result: ", Style::default().fg(Color::Gray)),
             Span::styled(app.calculator_module.current_result.clone(), result_style),
         ]),
     ])
+    .alignment(Alignment::Right) // Right-align the result
     .block(
         Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Green))
     );
-    f.render_widget(result_para, chunks[1]);
+    f.render_widget(result_para, result_chunks[1]);
 }
 
 fn draw_buttons(f: &mut Frame, app: &App, area: Rect, terminal_size: Rect) {
