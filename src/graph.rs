@@ -80,12 +80,36 @@ impl GraphModule {
         let mut tokens = Vec::new();
         let mut chars = expr.chars().peekable();
         let mut num_buf = String::new();
+        let mut ident_buf = String::new();
 
         while let Some(&ch) = chars.peek() {
             match ch {
                 '0'..='9' | '.' => {
                     num_buf.push(ch);
                     chars.next();
+                }
+                'a'..='z' | 'A'..='Z' | 'π' => {
+                    if !num_buf.is_empty() {
+                        tokens.push(Token::Number(num_buf.parse()?));
+                        num_buf.clear();
+                    }
+                    ident_buf.push(ch);
+                    chars.next();
+                    while let Some(&nc) = chars.peek() {
+                        if nc.is_alphanumeric() || nc == '_' {
+                            ident_buf.push(nc);
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    let ident = ident_buf.to_lowercase();
+                    ident_buf.clear();
+                    match ident.as_str() {
+                        "pi" | "π" => tokens.push(Token::Number(std::f64::consts::PI)),
+                        "e" => tokens.push(Token::Number(std::f64::consts::E)),
+                        _ => tokens.push(Token::Ident(ident)),
+                    }
                 }
                 '+' | '-' | '*' | '/' | '^' | '%' | '(' | ')' => {
                     if !num_buf.is_empty() {
@@ -241,6 +265,28 @@ impl GraphModule {
                 }
                 Ok((value, new_pos + 1))
             }
+            Token::Ident(name) => {
+                if pos + 1 < tokens.len() && matches!(tokens[pos + 1], Token::LParen) {
+                    let (arg, np) = self.parse_expression(tokens, pos + 2)?; // after ident + '('
+                    if np >= tokens.len() || !matches!(tokens[np], Token::RParen) {
+                        return Err(anyhow::anyhow!("Missing closing parenthesis"));
+                    }
+                    let val = match name.as_str() {
+                        "sin" => arg.sin(),
+                        "cos" => arg.cos(),
+                        "tan" => arg.tan(),
+                        "sqrt" => arg.sqrt(),
+                        "log" => arg.log10(),
+                        "ln" => arg.ln(),
+                        "exp" => arg.exp(),
+                        "abs" => arg.abs(),
+                        _ => return Err(anyhow::anyhow!("Unknown function: {}", name)),
+                    };
+                    Ok((val, np + 1))
+                } else {
+                    Err(anyhow::anyhow!("Unexpected identifier: {}", name))
+                }
+            }
             _ => Err(anyhow::anyhow!("Unexpected token")),
         }
     }
@@ -257,4 +303,5 @@ enum Token {
     Modulo,
     LParen,
     RParen,
+    Ident(String),
 }

@@ -9,7 +9,7 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend, layout::Rect};
 use std::io;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod calculator;
 mod graph;
@@ -45,6 +45,7 @@ pub struct App {
     pub show_cursor_coords: bool,
     pub second_function_mode: bool, // For 2nd function key
     pub show_help: bool,
+    pub last_nav_time: Option<Instant>,
 }
 
 impl Default for App {
@@ -75,6 +76,7 @@ impl App {
             show_cursor_coords: true,
             second_function_mode: false,
             show_help: false,
+            last_nav_time: None,
         }
     }
 
@@ -127,10 +129,10 @@ impl App {
         if let Some((row, col)) = self.button_position {
             let buttons = self.get_calculator_buttons();
             let actual_row = self.scroll_offset + row;
-            if actual_row < buttons.len()
-                && let Some((_, key)) = buttons[actual_row].get(col)
-            {
-                match *key {
+            if actual_row < buttons.len() && buttons[actual_row].get(col).is_some() {
+                // Also fetch the label to disambiguate collisions (e.g., cos vs clear, variable 'c')
+                let (label, key) = buttons[actual_row][col];
+                match key {
                     "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => self
                         .calculator_module
                         .append_digit(key.chars().next().unwrap()),
@@ -151,72 +153,62 @@ impl App {
                     "." => self.calculator_module.append_decimal(),
                     "enter" => self.calculator_module.calculate(),
                     "bksp" => self.calculator_module.backspace(),
-                    "c" => self.calculator_module.clear(),
+                    // 'c' key conflicts: could be clear current, cos function, or variable 'c'
+                    "c" => {
+                        if label == "cos" {
+                            self.calculator_module.apply_function("cos");
+                        } else if self.second_function_mode && label == "c" {
+                            self.calculator_module.current_expression.push('c');
+                            self.calculator_module.update_result();
+                        } else {
+                            self.calculator_module.clear();
+                        }
+                    }
                     "C" => {
                         self.calculator_module.clear_all();
                         self.history_selected = 0;
                     }
-                    "y" => {
-                        self.status_message =
-                            format!("Result: {}", self.calculator_module.current_result);
-                    }
-                    // Scientific functions
+                    // Scientific functions by label disambiguation
                     "s" => self.calculator_module.apply_function("sin"),
                     "t" => self.calculator_module.apply_function("tan"),
                     "q" => self.calculator_module.apply_function("sqrt"),
                     "l" => self.calculator_module.apply_function("log"),
                     "n" => self.calculator_module.apply_function("ln"),
-                    "e" => self.calculator_module.apply_function("exp"),
-                    "a" => self.calculator_module.apply_function("abs"),
-                    "i" => self.calculator_module.apply_function("1/x"),
-                    "x" => {
-                        // Check if this is the x² function or the x variable button
-                        if let Some((row, col)) = self.button_position {
-                            let buttons = self.get_calculator_buttons();
-                            let actual_row = self.scroll_offset + row;
-                            if actual_row < buttons.len() {
-                                let (label, _) = buttons[actual_row][col];
-                                if label == "x²" {
-                                    self.calculator_module.apply_function("x^2");
-                                } else if label == "x" {
-                                    self.calculator_module.current_expression.push('x');
-                                    self.calculator_module.update_result();
-                                }
-                            }
-                        }
-                    }
-                    #[allow(unreachable_patterns)]
-                    "y" => {
-                        if self.second_function_mode {
-                            self.calculator_module.current_expression.push('y');
-                            self.calculator_module.update_result();
-                        }
-                    }
-                    #[allow(unreachable_patterns)]
-                    "z" => {
-                        if self.second_function_mode {
-                            self.calculator_module.current_expression.push('z');
-                            self.calculator_module.update_result();
-                        }
-                    }
-                    #[allow(unreachable_patterns)]
+                    // 'a' could be abs function or variable 'a' in 2nd mode
                     "a" => {
-                        if self.second_function_mode {
+                        if label == "abs" {
+                            self.calculator_module.apply_function("abs");
+                        } else if self.second_function_mode && label == "a" {
                             self.calculator_module.current_expression.push('a');
                             self.calculator_module.update_result();
                         }
                     }
-                    #[allow(unreachable_patterns)]
-                    "b" => {
-                        if self.second_function_mode {
-                            self.calculator_module.current_expression.push('b');
+                    // 'e' could be exp() function or Euler's constant
+                    "e" => {
+                        if label == "exp" {
+                            self.calculator_module.apply_function("exp");
+                        } else if label == "e" {
+                            self.calculator_module
+                                .current_expression
+                                .push_str("2.71828");
                             self.calculator_module.update_result();
                         }
                     }
-                    #[allow(unreachable_patterns)]
-                    "c" => {
+                    "i" => self.calculator_module.apply_function("1/x"),
+                    "x" => {
+                        // Check if this is the x² function or the x variable button
+                        if label == "x²" {
+                            self.calculator_module.apply_function("x^2");
+                        } else if label == "x" {
+                            self.calculator_module.current_expression.push('x');
+                            self.calculator_module.update_result();
+                        }
+                    }
+                    // Variables y, z, b only in 2nd function mode (a and c handled above)
+                    "y" | "z" | "b" => {
                         if self.second_function_mode {
-                            self.calculator_module.current_expression.push('c');
+                            let ch = key.chars().next().unwrap();
+                            self.calculator_module.current_expression.push(ch);
                             self.calculator_module.update_result();
                         }
                     }
@@ -232,13 +224,6 @@ impl App {
                         self.calculator_module
                             .current_expression
                             .push_str("3.14159");
-                        self.calculator_module.update_result();
-                    }
-                    #[allow(unreachable_patterns)]
-                    "e" => {
-                        self.calculator_module
-                            .current_expression
-                            .push_str("2.71828");
                         self.calculator_module.update_result();
                     }
                     _ => {}
@@ -273,6 +258,24 @@ impl App {
         } else {
             // First navigation - set to (0, 0)
             self.button_position = Some((0, 0));
+        }
+    }
+
+    fn can_navigate(&mut self) -> bool {
+        let now = Instant::now();
+        match self.last_nav_time {
+            None => {
+                self.last_nav_time = Some(now);
+                true
+            }
+            Some(t) => {
+                if now.duration_since(t) >= Duration::from_millis(120) {
+                    self.last_nav_time = Some(now);
+                    true
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -332,6 +335,12 @@ impl App {
     pub fn toggle_history(&mut self) {
         self.show_history = !self.show_history;
         if self.show_history {
+            // Select newest entry by default
+            if !self.calculator_module.history.is_empty() {
+                self.history_selected = self.calculator_module.history.len() - 1;
+            } else {
+                self.history_selected = 0;
+            }
             self.status_message =
                 "History view - h to toggle back, ↑↓ navigate, r to recall".to_string();
         } else {
@@ -359,6 +368,9 @@ impl App {
     pub fn recall_from_history(&mut self) {
         self.calculator_module
             .recall_from_history(self.history_selected);
+        // Exit history back to calculator view after recall
+        self.show_history = false;
+        self.status_message = "Calculator mode".to_string();
     }
 
     pub fn enter_graph_mode(&mut self) {
@@ -574,14 +586,57 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                                 app.status_message =
                                     "Typing mode - type expressions, ` to exit".to_string();
                             }
-                            KeyCode::Up => app.button_up(),
-                            KeyCode::Down => app.button_down(),
-                            KeyCode::Left => app.button_left(),
-                            KeyCode::Right => app.button_right(),
-                            KeyCode::Enter | KeyCode::Char(' ') => app.press_button(),
+                            KeyCode::Up => {
+                                if !app.can_navigate() {
+                                    continue;
+                                }
+                                if app.show_history {
+                                    app.history_next();
+                                } else {
+                                    app.button_up();
+                                }
+                            }
+                            KeyCode::Down => {
+                                if !app.can_navigate() {
+                                    continue;
+                                }
+                                if app.show_history {
+                                    app.history_prev();
+                                } else {
+                                    app.button_down();
+                                }
+                            }
+                            KeyCode::Left => {
+                                if !app.can_navigate() {
+                                    continue;
+                                }
+                                if !app.show_history {
+                                    app.button_left();
+                                }
+                            }
+                            KeyCode::Right => {
+                                if !app.can_navigate() {
+                                    continue;
+                                }
+                                if !app.show_history {
+                                    app.button_right();
+                                }
+                            }
+                            KeyCode::Enter | KeyCode::Char(' ') => {
+                                if app.show_history {
+                                    app.recall_from_history();
+                                } else {
+                                    app.press_button();
+                                }
+                            }
                             KeyCode::Char('m') => app.toggle_mode(),
+                            KeyCode::Char('2') => app.toggle_second_function(),
                             KeyCode::Char('h') => app.toggle_history(),
-                            KeyCode::Char('r') => app.recall_from_history(),
+                            KeyCode::Char('r') => {
+                                if app.show_history {
+                                    app.recall_from_history();
+                                }
+                            }
                             KeyCode::Char('g') if modifiers.contains(KeyModifiers::CONTROL) => {
                                 app.enter_graph_mode()
                             }
@@ -592,8 +647,18 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                                 app.state = AppState::Normal;
                                 app.status_message = "Button navigation mode".to_string();
                             }
-                            KeyCode::Up => app.history_prev(),
-                            KeyCode::Down => app.history_next(),
+                            KeyCode::Up => {
+                                if !app.can_navigate() {
+                                    continue;
+                                }
+                                app.history_next()
+                            }
+                            KeyCode::Down => {
+                                if !app.can_navigate() {
+                                    continue;
+                                }
+                                app.history_prev()
+                            }
                             KeyCode::Char(c @ '0'..='9') => app.calculator_module.append_digit(c),
                             KeyCode::Char('.') => app.calculator_module.append_decimal(),
                             KeyCode::Char('+') => app.calculator_module.append_operator("+"),
@@ -610,94 +675,49 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                                 app.calculator_module.current_expression.push(')');
                                 app.calculator_module.update_result();
                             }
-                            KeyCode::Char('x') => {
-                                app.calculator_module.current_expression.push('x');
-                                app.calculator_module.update_result();
-                            }
-                            KeyCode::Char(c @ ('y' | 'z' | 'a' | 'b')) => {
-                                app.calculator_module.current_expression.push(c);
-                                app.calculator_module.update_result();
-                            }
-                            KeyCode::Char('c') if modifiers.contains(KeyModifiers::SHIFT) => {
-                                app.calculator_module.current_expression.push('c');
-                                app.calculator_module.update_result();
-                            }
                             KeyCode::Enter => app.calculator_module.calculate(),
                             KeyCode::Backspace => app.calculator_module.backspace(),
-                            KeyCode::Char('c') if !modifiers.contains(KeyModifiers::SHIFT) => {
-                                app.calculator_module.clear();
-                            }
-                            KeyCode::Char('C') => {
-                                app.calculator_module.clear_all();
-                                app.history_selected = 0;
-                            }
                             KeyCode::Char('m') => app.toggle_mode(),
                             KeyCode::Char('h') => app.toggle_history(),
-                            KeyCode::Char('r') => app.recall_from_history(),
                             KeyCode::Char('g') if modifiers.contains(KeyModifiers::CONTROL) => {
                                 app.enter_graph_mode()
                             }
                             KeyCode::Char('?') => {
                                 app.toggle_help();
                             }
-                            // Scientific functions (only in scientific mode)
-                            KeyCode::Char('s')
-                                if app.calculator_module.mode
-                                    == calculator::CalculatorMode::Scientific =>
-                            {
-                                app.calculator_module.apply_function("sin");
-                            }
-                            KeyCode::Char('t')
-                                if app.calculator_module.mode
-                                    == calculator::CalculatorMode::Scientific =>
-                            {
-                                app.calculator_module.apply_function("tan");
-                            }
-                            KeyCode::Char('q')
-                                if app.calculator_module.mode
-                                    == calculator::CalculatorMode::Scientific =>
-                            {
-                                app.calculator_module.apply_function("sqrt");
-                            }
-                            KeyCode::Char('l')
-                                if app.calculator_module.mode
-                                    == calculator::CalculatorMode::Scientific =>
-                            {
-                                app.calculator_module.apply_function("log");
-                            }
-                            KeyCode::Char('n')
-                                if app.calculator_module.mode
-                                    == calculator::CalculatorMode::Scientific =>
-                            {
-                                app.calculator_module.apply_function("ln");
-                            }
-                            KeyCode::Char('e')
-                                if app.calculator_module.mode
-                                    == calculator::CalculatorMode::Scientific =>
-                            {
-                                app.calculator_module.apply_function("exp");
-                            }
-                            #[allow(unreachable_patterns)]
-                            KeyCode::Char('a')
-                                if app.calculator_module.mode
-                                    == calculator::CalculatorMode::Scientific =>
-                            {
-                                app.calculator_module.apply_function("abs");
-                            }
-                            KeyCode::Char('i')
-                                if app.calculator_module.mode
-                                    == calculator::CalculatorMode::Scientific =>
-                            {
-                                app.calculator_module.apply_function("1/x");
+                            // In Typing mode, allow letters to build identifiers (functions/variables)
+                            KeyCode::Char(c) if c.is_ascii_alphabetic() => {
+                                app.calculator_module.current_expression.push(c);
+                                app.calculator_module.update_result();
                             }
                             _ => {}
                         },
                         AppState::Graph => match code {
                             KeyCode::Esc => app.exit_graph_mode(),
-                            KeyCode::Up => app.pan_graph(0.0, 1.0),
-                            KeyCode::Down => app.pan_graph(0.0, -1.0),
-                            KeyCode::Left => app.pan_graph(-1.0, 0.0),
-                            KeyCode::Right => app.pan_graph(1.0, 0.0),
+                            KeyCode::Up => {
+                                if !app.can_navigate() {
+                                    continue;
+                                }
+                                app.pan_graph(0.0, 1.0)
+                            }
+                            KeyCode::Down => {
+                                if !app.can_navigate() {
+                                    continue;
+                                }
+                                app.pan_graph(0.0, -1.0)
+                            }
+                            KeyCode::Left => {
+                                if !app.can_navigate() {
+                                    continue;
+                                }
+                                app.pan_graph(-1.0, 0.0)
+                            }
+                            KeyCode::Right => {
+                                if !app.can_navigate() {
+                                    continue;
+                                }
+                                app.pan_graph(1.0, 0.0)
+                            }
                             KeyCode::Char('+') => app.zoom_graph(1.2),
                             KeyCode::Char('-') => app.zoom_graph(0.8),
                             KeyCode::Char('r') => {
@@ -744,10 +764,28 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                             app.mouse_position = Some((mouse_event.column, mouse_event.row));
                             // Update graph cursor if in graph mode
                             if app.state == AppState::Graph {
-                                let terminal_size = terminal.size()?;
-                                // Create a placeholder graph area for cursor tracking
-                                let graph_area =
-                                    Rect::new(0, 0, terminal_size.width, terminal_size.height);
+                                // Reconstruct the same layout used in ui::draw to compute the graph area
+                                let size = terminal.size()?;
+                                let full = Rect::new(0, 0, size.width, size.height);
+                                let v = ratatui::layout::Layout::default()
+                                    .direction(ratatui::layout::Direction::Vertical)
+                                    .constraints([
+                                        ratatui::layout::Constraint::Length(3),
+                                        ratatui::layout::Constraint::Min(0),
+                                        ratatui::layout::Constraint::Length(3),
+                                    ])
+                                    .split(full);
+                                // In Graph state, ui draws: title, then graph container split into (3, Min, 3)
+                                let graph_outer = v[1];
+                                let graph_chunks = ratatui::layout::Layout::default()
+                                    .direction(ratatui::layout::Direction::Vertical)
+                                    .constraints([
+                                        ratatui::layout::Constraint::Length(3),
+                                        ratatui::layout::Constraint::Min(0),
+                                        ratatui::layout::Constraint::Length(3),
+                                    ])
+                                    .split(graph_outer);
+                                let graph_area = graph_chunks[1];
                                 app.update_graph_cursor(
                                     mouse_event.column,
                                     mouse_event.row,

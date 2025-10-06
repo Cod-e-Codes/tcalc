@@ -47,6 +47,13 @@ impl CalculatorModule {
 
     pub fn append_operator(&mut self, op: &str) {
         self.error_message = None;
+        // Allow leading unary minus via buttons
+        if self.current_expression.is_empty() {
+            if op == "-" {
+                self.current_expression.push('-');
+            }
+            return;
+        }
         if !self.current_expression.is_empty() {
             let last_char = self.current_expression.chars().last().unwrap();
             if "+-*/^%".contains(last_char) {
@@ -167,8 +174,18 @@ impl CalculatorModule {
 
     pub fn recall_from_history(&mut self, index: usize) {
         if index < self.history.len() {
-            self.current_expression = self.history[index].result.clone();
-            self.current_result = self.history[index].result.clone();
+            // Recall the original expression, then update the live result
+            self.current_expression = self.history[index].expression.clone();
+            match self.evaluate_expression(&self.current_expression) {
+                Ok(result) => {
+                    self.current_result = format_result(result);
+                    self.error_message = None;
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Error: {}", e));
+                    self.current_result = String::from("Error");
+                }
+            }
         }
     }
 
@@ -205,12 +222,40 @@ fn tokenize(expr: &str) -> Result<Vec<Token>> {
     let mut tokens = Vec::new();
     let mut chars = expr.chars().peekable();
     let mut num_buf = String::new();
+    let mut ident_buf = String::new();
 
     while let Some(&ch) = chars.peek() {
         match ch {
             '0'..='9' | '.' => {
                 num_buf.push(ch);
                 chars.next();
+            }
+            'a'..='z' | 'A'..='Z' | 'π' => {
+                // flush number buffer
+                if !num_buf.is_empty() {
+                    tokens.push(Token::Number(num_buf.parse()?));
+                    num_buf.clear();
+                }
+                ident_buf.push(ch);
+                chars.next();
+                // collect full identifier
+                while let Some(&nc) = chars.peek() {
+                    if nc.is_alphanumeric() || nc == '_' {
+                        ident_buf.push(nc);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                let ident = ident_buf.to_lowercase();
+                ident_buf.clear();
+                match ident.as_str() {
+                    // constants
+                    "pi" | "π" => tokens.push(Token::Number(std::f64::consts::PI)),
+                    "e" => tokens.push(Token::Number(std::f64::consts::E)),
+                    // recognized function names become identifiers; parsing will handle call
+                    _ => tokens.push(Token::Ident(ident)),
+                }
             }
             '+' | '-' | '*' | '/' | '^' | '%' | '(' | ')' => {
                 if !num_buf.is_empty() {
@@ -282,6 +327,7 @@ enum Token {
     Modulo,
     LParen,
     RParen,
+    Ident(String),
 }
 
 fn parse_expression(tokens: &[Token], mut pos: usize) -> Result<(f64, usize)> {
@@ -378,6 +424,29 @@ fn parse_primary(tokens: &[Token], pos: usize) -> Result<(f64, usize)> {
                 return Err(anyhow::anyhow!("Missing closing parenthesis"));
             }
             Ok((value, new_pos + 1))
+        }
+        Token::Ident(name) => {
+            // function call: ident '(' expr ')'
+            if pos + 1 < tokens.len() && matches!(tokens[pos + 1], Token::LParen) {
+                let (arg, np) = parse_expression(tokens, pos + 2)?; // skip ident + '('
+                if np >= tokens.len() || !matches!(tokens[np], Token::RParen) {
+                    return Err(anyhow::anyhow!("Missing closing parenthesis"));
+                }
+                let val = match name.as_str() {
+                    "sin" => arg.sin(),
+                    "cos" => arg.cos(),
+                    "tan" => arg.tan(),
+                    "sqrt" => arg.sqrt(),
+                    "log" => arg.log10(),
+                    "ln" => arg.ln(),
+                    "exp" => arg.exp(),
+                    "abs" => arg.abs(),
+                    _ => return Err(anyhow::anyhow!("Unknown function: {}", name)),
+                };
+                Ok((val, np + 1))
+            } else {
+                Err(anyhow::anyhow!("Unexpected identifier: {}", name))
+            }
         }
         _ => Err(anyhow::anyhow!("Unexpected token")),
     }

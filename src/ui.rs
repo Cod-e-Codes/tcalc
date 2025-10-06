@@ -287,7 +287,7 @@ fn draw_history(f: &mut Frame, app: &App, area: Rect) {
             let style = if is_selected {
                 Style::default()
                     .fg(Color::Black)
-                    .bg(Color::Yellow)
+                    .bg(Color::LightCyan)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
